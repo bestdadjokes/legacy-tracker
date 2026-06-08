@@ -16,11 +16,13 @@ export async function sendEmail({
   replyTo,
   subject,
   text,
+  html,
 }: {
   to?: string;
   replyTo?: string;
   subject: string;
   text: string;
+  html?: string;
 }) {
   const client = getResend();
   const from = process.env.EMAIL_FROM || "Legacy Training <onboarding@resend.dev>";
@@ -32,6 +34,7 @@ export async function sendEmail({
     replyTo,
     subject,
     text,
+    ...(html ? { html } : {}),
   });
 
   if (error) throw error;

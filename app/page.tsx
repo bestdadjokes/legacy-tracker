@@ -71,6 +71,33 @@ export default function TrackingPage() {
             </Reveal>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-10">
+              {/*
+                Honeypot: hidden from real users but visible to naive bots that
+                fill every field. The server silently drops any submission where
+                this is non-empty. This is only cheap deterrence — a rate limiter
+                (KV/Upstash) or Turnstile is the real fix for this public,
+                unauthenticated endpoint.
+              */}
+              <div
+                aria-hidden="true"
+                style={{
+                  position: "absolute",
+                  left: "-9999px",
+                  width: "1px",
+                  height: "1px",
+                  overflow: "hidden",
+                }}
+              >
+                <label htmlFor="company">Company (leave blank)</label>
+                <input
+                  type="text"
+                  id="company"
+                  name="company"
+                  tabIndex={-1}
+                  autoComplete="off"
+                />
+              </div>
+
               {/* Cover Fields */}
               <div className="grid md:grid-cols-2 gap-5">
                 <Field

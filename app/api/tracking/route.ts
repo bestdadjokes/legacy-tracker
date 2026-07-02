@@ -11,23 +11,135 @@ const MEAL_LABELS: Record<string, string> = {
   snack2: "Snack 2",
 };
 
-export async function POST(request: Request) {
-  const data = await request.json();
+// Hidden honeypot field name (see app/page.tsx). Real users never fill this;
+// bots that blindly complete every field do. This is only cheap deterrence —
+// the real fix for this public, unauthenticated email endpoint is a rate
+// limiter (KV/Upstash) or a Turnstile challenge in front of the POST.
+const HONEYPOT_FIELD = "company";
 
-  if (!data.clientName) {
-    return NextResponse.json({ error: "Name is required." }, { status: 400 });
+// Per-field and total-payload caps. Free-text fields (notes, meals, workout)
+// get the larger cap; short cover fields are capped tighter below.
+const MAX_FIELD_LENGTH = 2000;
+const MAX_SHORT_FIELD_LENGTH = 200;
+const MAX_TOTAL_LENGTH = 60_000;
+
+const SHORT_FIELDS = new Set(["clientName", "weekOf"]);
+
+// Whitelist of every field the form can legitimately submit. Anything else is
+// rejected outright rather than forwarded into the email.
+const ALLOWED_FIELDS: Set<string> = buildAllowedFields();
+
+function buildAllowedFields(): Set<string> {
+  const fields = new Set<string>(["clientName", "weekOf", HONEYPOT_FIELD]);
+  const meals = Object.keys(MEAL_LABELS);
+  for (const day of DAYS) {
+    fields.add(`${day}-date`);
+    for (const meal of meals) {
+      fields.add(`${day}-${meal}`);
+      fields.add(`${day}-${meal}-cal`);
+      fields.add(`${day}-${meal}-protein`);
+      fields.add(`${day}-${meal}-carbs`);
+      fields.add(`${day}-${meal}-fat`);
+    }
+    fields.add(`${day}-water`);
+    fields.add(`${day}-caffeine`);
+    fields.add(`${day}-other-bev`);
+    fields.add(`${day}-calories`);
+    fields.add(`${day}-protein`);
+    fields.add(`${day}-carbs`);
+    fields.add(`${day}-fat`);
+    fields.add(`${day}-sleep-hrs`);
+    fields.add(`${day}-steps`);
+    fields.add(`${day}-sleep-quality`);
+    fields.add(`${day}-energy`);
+    fields.add(`${day}-workout-type`);
+    fields.add(`${day}-workout-intensity`);
+    fields.add(`${day}-notes`);
+  }
+  return fields;
+}
+
+type ValidationResult =
+  | { ok: true; data: Record<string, string> }
+  | { ok: false; error: string };
+
+function validateBody(raw: unknown): ValidationResult {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+    return { ok: false, error: "Malformed request body." };
   }
 
-  const text = Object.entries(data)
-    .filter(([, v]) => v)
-    .map(([k, v]) => `${k}: ${v}`)
-    .join("\n");
+  const data: Record<string, string> = {};
+  let total = 0;
 
-  const html = buildHtmlEmail(data);
+  for (const [key, value] of Object.entries(raw)) {
+    if (!ALLOWED_FIELDS.has(key)) {
+      return { ok: false, error: `Unexpected field: ${key}` };
+    }
+    if (typeof value !== "string") {
+      return { ok: false, error: `Field ${key} must be a string.` };
+    }
+    const limit = SHORT_FIELDS.has(key)
+      ? MAX_SHORT_FIELD_LENGTH
+      : MAX_FIELD_LENGTH;
+    if (value.length > limit) {
+      return { ok: false, error: `Field ${key} is too long.` };
+    }
+    total += value.length;
+    if (total > MAX_TOTAL_LENGTH) {
+      return { ok: false, error: "Payload too large." };
+    }
+    data[key] = value;
+  }
 
+  if (!data.clientName) {
+    return { ok: false, error: "Name is required." };
+  }
+
+  return { ok: true, data };
+}
+
+// Strip characters that would let a submitted value inject additional email
+// headers, then truncate so the subject line stays sane.
+function sanitizeSubjectPart(value: string, max = 100): string {
+  return value.replace(/[\r\n]+/g, " ").trim().slice(0, max);
+}
+
+export async function POST(request: Request) {
   try {
+    let raw: unknown;
+    try {
+      raw = await request.json();
+    } catch {
+      return NextResponse.json(
+        { error: "Malformed request body." },
+        { status: 400 }
+      );
+    }
+
+    const result = validateBody(raw);
+    if (!result.ok) {
+      return NextResponse.json({ error: result.error }, { status: 400 });
+    }
+    const data = result.data;
+
+    // Honeypot: silently accept (so bots can't distinguish success from
+    // rejection) but never actually send the email.
+    if (data[HONEYPOT_FIELD]) {
+      return NextResponse.json({ success: true });
+    }
+
+    const text = Object.entries(data)
+      .filter(([k, v]) => k !== HONEYPOT_FIELD && v)
+      .map(([k, v]) => `${k}: ${v}`)
+      .join("\n");
+
+    const html = buildHtmlEmail(data);
+
+    const clientName = sanitizeSubjectPart(data.clientName);
+    const weekOf = sanitizeSubjectPart(data.weekOf || "N/A");
+
     await sendEmail({
-      subject: `Wellness Tracker: ${data.clientName} — ${data.weekOf || "N/A"}`,
+      subject: `Wellness Tracker: ${clientName} — ${weekOf}`,
       text,
       html,
     });
@@ -240,5 +352,6 @@ function esc(s: string): string {
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }

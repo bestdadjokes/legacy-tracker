@@ -12,26 +12,24 @@ function getResend() {
 }
 
 export async function sendEmail({
-  to,
-  replyTo,
   subject,
   text,
   html,
 }: {
-  to?: string;
-  replyTo?: string;
   subject: string;
   text: string;
   html?: string;
 }) {
   const client = getResend();
-  const from = process.env.EMAIL_FROM || "Legacy Training <onboarding@resend.dev>";
-  const recipient = to || process.env.EMAIL_TO || "info@legacy-training.com";
+
+  // Fixed server-side, never caller-supplied (no open-relay risk).
+  // Defaults keep the live form working with no env config; override in Vercel if addresses change.
+  const from = process.env.EMAIL_FROM ?? "info@legacy-training.com";
+  const recipient = process.env.EMAIL_TO ?? "info@legacy-training.com";
 
   const { error } = await client.emails.send({
     from,
     to: recipient,
-    replyTo,
     subject,
     text,
     ...(html ? { html } : {}),

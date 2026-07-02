@@ -14,6 +14,10 @@ const garet = localFont({
 export const metadata: Metadata = {
   title: "Wellness Tracker | Legacy Training",
   robots: { index: false, follow: false },
+  icons: {
+    icon: [{ url: "/favicon.ico?v=2", sizes: "32x32" }],
+    apple: [{ url: "/apple-icon.png?v=2", sizes: "180x180" }],
+  },
 };
 
 export default function RootLayout({

@@ -11,7 +11,7 @@ export function Section({
   id?: string;
 }) {
   return (
-    <section id={id} className={`py-28 md:py-36 px-6 ${className}`}>
+    <section id={id} className={`py-20 md:py-28 px-6 ${className}`}>
       <div className="mx-auto max-w-6xl">{children}</div>
     </section>
   );
@@ -20,7 +20,7 @@ export function Section({
 export function SectionLabel({ children }: { children: ReactNode }) {
   return (
     <Reveal>
-      <span className="text-[11px] tracking-[0.3em] uppercase text-lime block mb-5">
+      <span className="text-[13px] tracking-[0.3em] uppercase text-lime block mb-5">
         {children}
       </span>
     </Reveal>

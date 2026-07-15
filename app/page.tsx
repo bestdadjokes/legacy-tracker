@@ -19,9 +19,12 @@ function getWeekMonday(offset = 0): string {
   const now = new Date();
   const day = now.getDay();
   const diff = day === 0 ? -6 : 1 - day;
-  const monday = new Date(now);
-  monday.setDate(now.getDate() + diff + offset * 7);
-  return monday.toISOString().split("T")[0];
+  const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() + diff + offset * 7);
+  // Format from local date parts — toISOString() converts to UTC, which
+  // rolled the week key to Tuesday for sessions after 8pm ET.
+  const m = String(monday.getMonth() + 1).padStart(2, "0");
+  const d = String(monday.getDate()).padStart(2, "0");
+  return `${monday.getFullYear()}-${m}-${d}`;
 }
 
 function isPreview() {
